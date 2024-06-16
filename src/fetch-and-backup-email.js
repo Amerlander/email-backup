@@ -16,10 +16,11 @@ export async function fetchAndBackupEmail({ imapConfig, searchQuery, output }) {
 
 async function _sanitizeFilename(filename) {
   // Replace special characters with underscores
-  if(filename.length) {
+  if(filename && filename.length) {
   return filename
-            .replace(/\./g, 'DOT')
+            // .replace(/\./g, 'DOT')
             .replace(/@/g, 'AT')
+            .replace(/\s/g, '_')
             .replace(/[^0-9a-zA-Z_-]/g, '-').trim();
   } else {
     return '___';
@@ -60,7 +61,7 @@ async function convertEmailToMarkdown(email) {
 - **To:** ${to}
 - **Subject:** ${subject}
 - **Date:** ${date}
-- **Attachments:** ${attachments}
+- **Attachments:** ${attachments ?? 'None'}
 
 ### Email Body:
 
@@ -70,10 +71,11 @@ ${markdownBody}`;
 }
 
 async function _saveIfNotExist(mail, output) {
-  const sanitizedSubject = (await _sanitizeFilename(mail.subject)).substring(0, 25);
+  const sanitizedSubject = (await _sanitizeFilename(mail.subject)).substring(0, 20);
   const sanitizedFrom = mail.from?.value[0].address ? await _sanitizeFilename(mail.from?.value[0].address) : 'NO-FROM';
-  const sanitizedSMessageID = (await _sanitizeFilename(mail.messageId)).substring(0, 50);
-  const sanitizedTitle = `${mail.date.toISOString().split('T')[0]} ${sanitizedFrom} ${sanitizedSubject}`;
+  const sanitizedSMessageID = (await _sanitizeFilename(mail.messageId)).substring(0, 10);
+  const sanitizeDateString = await _sanitizeFilename(mail.dateString);
+  const sanitizedTitle = `${sanitizeDateString} ${sanitizedFrom} ${sanitizedSubject} ${sanitizedSMessageID}`;
 
   const folderPath = join(output, sanitizedTitle);
   const absoluteFolderPath = isAbsolute(output) ? folderPath : resolve(folderPath);
@@ -89,10 +91,10 @@ async function _saveIfNotExist(mail, output) {
     // Write email content to .md file
     const markdownContent = await convertEmailToMarkdown(mail);
     await writeFile(mdFilePath, markdownContent);
-    await writeFile(jsonFilePath, JSON.stringify(mail, null, 2));
+    await writeFile(jsonFilePath, JSON.stringify(mail));
 
     // Check if there are attachments
-    if (mail.attachments.length > 0 && 1 != 2) {
+    if (mail.attachments && mail.attachments.length > 0) {
       const zipStream = createWriteStream(zipFilePath);
       const archive = archiver('zip', { zlib: { level: 9 } });
 

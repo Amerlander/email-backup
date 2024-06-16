@@ -17,7 +17,7 @@ class ImapClient {
     })
   }
 
-  async fetch(searchQuery) {
+  async fetch(query) {
     await this.#client.connect()
     const lock = await this.#client.getMailboxLock('INBOX')
     const messages = []
@@ -27,17 +27,14 @@ class ImapClient {
         headers: ['date', 'subject'],
         bodyStructure: true,
       }
-      // const sinceDate = new Date('2024-06-15');
-      // const query = { since: sinceDate };
-      const query = Object.keys(searchQuery).length ? searchQuery : { all: true }
-      // let i = 0;
+
+      // const query = { since: sinceDate, ... };
+      // const query = Object.keys(searchQuery).length ? searchQuery : { all: true }
       for await (const message of this.#client.fetch(query, fetchOptions)) {
-        // i++;
-        // if(i > 10) break;
         
         const mail = await simpleParser(message.source)
         // console.log(mail)
-        const dateString = (mail.date) ? `${mail.date.toISOString().split('T')[0]}${mail.date.toTimeString().split(' ')[0]}` : '';
+        const dateString = (mail.date) ? `${mail.date.toISOString().split('T')[0]} ${mail.date.toTimeString().split(' ')[0]}` : 'NO VALID DATE';
         // const subject = (mail.subject || 'No Subject')
         // console.log('READ EMAIL', title)
         // const attachments = mail.attachments.map(attachment => ({
