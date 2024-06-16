@@ -15,7 +15,7 @@ format.
 - The full Email Object is stored in a JSON file
 - If there are any attachments they will be saved into a Zip file
 - added `start` and `end` arguments
-- removed `from` argumnt
+- removed `from` argument
 
 ## Usage
 
