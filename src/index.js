@@ -8,14 +8,15 @@ import { fetchAndBackupEmail } from './fetch-and-backup-email.js'
 async function main() {
   const args = yargs(hideBin(argv))
     .option('envPath', { describe: 'Environment path' })
-    .option('from', { describe: 'Email address to search for' })
-    .option('output', { describe: 'Backup Dir path' })
+    .option('from', { describe: 'Email address to search for', default: null })
+    .option('output', { describe: 'Backup Dir path', demandOption: true })
     .parse()
 
-  if (args.envPath)
+  if (args.envPath) {
     dotenv.config({ path: args.envPath })
-  else
+  } else {
     dotenv.config()
+  }
 
   const imapConfig = {
     host: env.IMAP_HOST,
@@ -24,7 +25,8 @@ async function main() {
     password: env.IMAP_PASSWORD,
   }
 
-  await fetchAndBackupEmail({ imapConfig, searchQuery: { from: args.from }, output: args.output })
+  const searchQuery = args.from ? { from: args.from } : {}
+  await fetchAndBackupEmail({ imapConfig, searchQuery, output: args.output })
 }
 
 main().catch(console.error)

@@ -22,19 +22,38 @@ class ImapClient {
     const lock = await this.#client.getMailboxLock('INBOX')
     const messages = []
     try {
-      for await (const message of this.#client.fetch(searchQuery, {
+      const fetchOptions = {
         source: true,
         headers: ['date', 'subject'],
-      })) {
+        bodyStructure: true,
+      }
+      // const sinceDate = new Date('2024-06-15');
+      // const query = { since: sinceDate };
+      const query = Object.keys(searchQuery).length ? searchQuery : { all: true }
+      // let i = 0;
+      for await (const message of this.#client.fetch(query, fetchOptions)) {
+        // i++;
+        // if(i > 10) break;
+        
         const mail = await simpleParser(message.source)
-        const title = `${mail.date.toISOString().split('T')[0]} - ${mail.subject}`
+        // console.log(mail)
+        const dateString = (mail.date) ? `${mail.date.toISOString().split('T')[0]}${mail.date.toTimeString().split(' ')[0]}` : '';
+        // const subject = (mail.subject || 'No Subject')
+        // console.log('READ EMAIL', title)
+        // const attachments = mail.attachments.map(attachment => ({
+        //   filename: attachment.filename,
+        //   content: attachment.content,
+        // }))
+
         messages.push({
-          title,
-          text: `# ${title}\n${mail.text}`,
+          dateString,
+          ...mail,
+          // title,
+          // text: `# ${title}\n${mail.text}`,
+          // attachments,
         })
       }
-    }
-    finally {
+    } finally {
       await lock.release()
     }
     await this.#client.logout()
