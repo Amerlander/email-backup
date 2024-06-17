@@ -14,9 +14,10 @@ export async function fetchAndBackupEmail({ imapConfig, searchQuery, output }) {
   const messages = await client.fetch(searchQuery)
   const countMessages = messages.length;
   for (const [index, message] of messages.entries()) {
+    console.log(`Processing ${index+1}/${countMessages} | ${message.dateString} | ${message.subject}`)
     await _saveIfNotExist(message, output)
-    console.log(`(${index}/${countMessages}) | ${message.dateString} ${message.subject}`)
   }
+  console.log("=== FINISHED ===")
 }
 
 async function _sanitizeFilename(filename) {
@@ -159,11 +160,11 @@ function isValidUrl(urlString) {
 
 
 async function _saveIfNotExist(mail, output) {
-  const sanitizedSubject = (await _sanitizeFilename(mail.subject)).substring(0, 20);
+  const sanitizedSubject = (await _sanitizeFilename(mail.subject)).substring(0, 25);
   const sanitizedFrom = mail.from?.value[0].address ? await _sanitizeFilename(mail.from?.value[0].address) : 'NO-FROM';
-  const sanitizedSMessageID = (await _sanitizeFilename(mail.messageId)).substring(0, 10);
+  // const sanitizedSMessageID = (await _sanitizeFilename(mail.messageId)).substring(0, 10);
   const sanitizeDateString = await _sanitizeFilename(mail.dateString);
-  const sanitizedTitle = `${sanitizeDateString}${mail.headers.get('x-spam') ? ' _SPAM_ ' : ''} ${sanitizedFrom} ${sanitizedSubject} ${sanitizedSMessageID}`;
+  const sanitizedTitle = `${sanitizeDateString}${(mail.headers.get('x-spam') || mail.headers.get('x-spam-level')?.length > 2) ? ' _SPAM_ ' : ''} ${sanitizedFrom} ${sanitizedSubject}`;
 
   const folderPath = join(output, (mail.mailbox.path ?? 'Undefined'), sanitizedTitle);
   const absoluteFolderPath = isAbsolute(output) ? folderPath : resolve(folderPath);

@@ -30,6 +30,7 @@
     "imapflow": "^1.0.147",
     "jsdom": "^24.1.0",
     "mailparser": "^3.6.5",
+    "readline-sync": "^1.4.10",
     "turndown": "^7.2.0",
     "yargs": "^17.7.2"
   },

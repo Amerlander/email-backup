@@ -49,24 +49,29 @@ class ImapClient {
           // const query = { since: sinceDate, ... };
           // const query = Object.keys(searchQuery).length ? searchQuery : { all: true }
           for await (const message of this.#client.fetch(query, fetchOptions)) {
-            
-            const mail = await simpleParser(message.source)
-            const dateString = (mail.date) ? `${mail.date.toISOString().split('T')[0]} ${mail.date.toTimeString().split(' ')[0]}` : 'NO VALID DATE';
-            // const subject = (mail.subject || 'No Subject')
-            // console.log('READ EMAIL', mail)
-            // const attachments = mail.attachments.map(attachment => ({
-            //   filename: attachment.filename,
-            //   content: attachment.content,
-            // }))
+            try{
+              const mail = await simpleParser(message.source)
+              const dateString = (mail.date) ? `${mail.date.toISOString().split('T')[0]} ${mail.date.toTimeString().split(' ')[0]}` : 'NO VALID DATE';
+              // const subject = (mail.subject || 'No Subject')
+              // console.log('READ EMAIL', mail)
+              // const attachments = mail.attachments.map(attachment => ({
+              //   filename: attachment.filename,
+              //   content: attachment.content,
+              // }))
 
-            messages.push({
-              dateString,
-              mailbox,
-              ...mail,
-              // title,
-              // text: `# ${title}\n${mail.text}`,
-              // attachments,
-            })
+              messages.push({
+                dateString,
+                mailbox,
+                ...mail,
+                // title,
+                // text: `# ${title}\n${mail.text}`,
+                // attachments,
+              })
+            } catch {
+              console.log('ERROR PARSING EMAIL');
+              console.log('MESSAGE', message);
+              console.log('ERROR PARSING EMAIL');
+            }
           }
         } finally {
           await lock.release()
