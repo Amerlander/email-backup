@@ -7,21 +7,27 @@ It uses the IMAP protocol to connect to the mail server and download the emails.
 format.
 
 ## Additions in this Fork:
-
-- A folder is created per Email ( in the format of `YYYY-MM-DD_h-m-s __SPAM__ from subject` )
-- Folder name is sanitized to prevent conflicts
-- HTML in any email is translated into Makrdown
-- Email Meta information is appended to the top of each md file
-- The full Email Object is stored in a JSON file
-- If there are any attachments they will be saved into a Zip file
-- files are stored inside the MAIL folder, one subfolder per env file and each have subfolders for mailboxes
+- Save Emails:
+  - Full Email as .eml file
+  - HTML Body + Email Meta as markdown file with images as local assets
+  - Attachments as .zip
+  - ~~The full Email Object is stored in a JSON file~~ (removed again in favor of .eml files)
+- Folder structure
+  - MAIL
+    - [name_of_env_file]
+      - [inbox name]
+        - A folder per Email ( in the format of `YYYY-MM-DD_h-m-s __SPAM__ from subject` )
+          - assets/[i].jpg/png/gif/... (for images linked in the email)
+          - *.md
+          - *.eml
+          - *.zip
+- Folder name is sanitized to prevent conflicts with special characters
 - last execution is saved in MAIL folder
 - added `start` and `end` arguments
-- end defaults to tomorrow
-- start tries to read the last execution and use this date or falls back to last month
-- removed `from` and `output` arguments
+- `end` defaults to tomorrow
+- `start` tries to read the *last execution* and use this date or falls back to *last month*
+- removed ~~`from`~~ and ~~`output`~~ arguments
 - removed passwords from env file and promt after starting the command
-
 
 ## Usage
 
