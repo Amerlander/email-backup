@@ -8,12 +8,14 @@ format.
 
 ## Additions in this Fork:
 
-- A folder is created per Email
+- A folder is created per Email ( in the format of `YYYY-MM-DD_h-m-s from subject id` )
+- Folder name is sanitized to prevent conflicts
 - HTML in any email is translated into Makrdown
+- Email Meta information is appended to the top of each md file
 - The full Email Object is stored in a JSON file
 - If there are any attachments they will be saved into a Zip file
 - added `start` and `end` arguments
-- removed `from` argumnt
+- removed `from` argument
 
 ## Usage
 
