@@ -9,6 +9,7 @@ import { access, constants, writeFile, mkdir, readFile } from 'node:fs/promises'
 import path from 'path'
 // import promptSync from 'prompt-sync'; // Import prompt-sync using default export
 import readlineSync from 'readline-sync';
+import clc from 'cli-color';
 
 // const prompt = promptSync({ sigint: true }); // Create a prompt instance with sigint option
 
@@ -34,6 +35,7 @@ async function main() {
       await access(lastExecutionFile, constants.F_OK)
       const lastExecutionDate = await readFile(lastExecutionFile, 'utf8')
       startDate = format(parseISO(lastExecutionDate), 'yyyy-MM-dd')
+      console.log(clc.green("\nLast execution found:"), startDate)
     } catch {
       startDate = format(addMonths(new Date(), -1), 'yyyy-MM-dd')
     }
@@ -46,7 +48,7 @@ async function main() {
   }
 
   // Prompt for IMAP password securely
-  const password = readlineSync.question('Enter IMAP password: ', {
+  const password = readlineSync.question(clc.red('\nEnter IMAP Password: '), {
     hideEchoBack: true,
     mask: '*' // Optional, can be used instead of hideEchoBack
   });
@@ -54,7 +56,7 @@ async function main() {
   // Prompt for IMAP password
   // const password = prompt('Enter IMAP password: ', { hideEchoBack: true });
   if (!password) {
-    console.error('IMAP password is required.');
+    console.error(clc.red('IMAP password is required.'));
     process.exit(1);
   }
 
@@ -71,7 +73,7 @@ async function main() {
     before: argsWithDefaults.end,
   }
 
-  console.log(searchQuery)
+  console.log("Search Query:", searchQuery)
 
   // Ensure the output directory exists
   try {

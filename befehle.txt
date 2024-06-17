@@ -1,0 +1,9 @@
+npx email-backup --envPath "./info_juriwolf.de.env" --output "./MAIL/infoATjuriwolfDOTde" --start "2024-01-01" --end "2026-01-02"
+
+
+
+
+
+npx email-backup --envPath "./info_juriwolf.de.env" --output "./MAIL/infoATjuriwolfDOTde"
+
+npx email-backup --envPath "./info_moliri-db.de.env" --output "./MAIL/infoATmoliri-dbDOTde"

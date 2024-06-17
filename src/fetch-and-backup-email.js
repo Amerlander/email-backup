@@ -8,6 +8,7 @@ import { JSDOM } from 'jsdom';
 import path from 'path';
 import axios from 'axios';
 import { URL } from 'url';
+import clc from 'cli-color';
 
 export async function fetchAndBackupEmail({ imapConfig, searchQuery, output }) {
   const client = new ImapClient(imapConfig)
@@ -17,7 +18,7 @@ export async function fetchAndBackupEmail({ imapConfig, searchQuery, output }) {
     console.log(`Processing ${index+1}/${countMessages} | ${message.dateString} | ${message.subject}`)
     await _saveIfNotExist(message, output)
   }
-  console.log("=== FINISHED ===")
+  console.log(clc.green("=== FINISHED ==="))
 }
 
 async function _sanitizeFilename(filename) {
@@ -99,7 +100,7 @@ async function convertEmailToMarkdown(email, savePath) {
           imgData = await readFile(filePath);
           imgExt = path.extname(src).slice(1) || 'jpg';
         } catch (err) {
-          console.error(`Failed to read local image: ${src}`);
+          console.error(clc.magenta(`Failed to read local image: ${src}`));
           imgData = null;
           imgExt = 'jpg'; // Fallback in case of error
           continue;
@@ -122,11 +123,11 @@ async function convertEmailToMarkdown(email, savePath) {
   
   } catch {
     try {
-      console.error(`Failed to convert HTML body to DOM. Falling back to text as HTML.`)
+      console.error(clc.yellow(`Failed to convert HTML body to DOM. Falling back to text as HTML.`))
     const turndownService = new Turndown();
     markdownBody = turndownService.turndown(email.textAsHtml);
     } catch {
-      console.error(`Failed to convert HTML body to Markdown using Turndown. Falling back to plain text.`)
+      console.error(clc.yellowBright(`Failed to convert HTML body to Markdown using Turndown. Falling back to plain text.`))
     }
   }
 
@@ -171,6 +172,7 @@ async function _saveIfNotExist(mail, output) {
   const mdFilePath = `${absoluteFolderPath}/${sanitizedTitle}.md`;
   const zipFilePath = `${absoluteFolderPath}/${sanitizedTitle}.zip`;
   const jsonFilePath = `${absoluteFolderPath}/${sanitizedTitle}.json`;
+  const emlFilePath = `${absoluteFolderPath}/${sanitizedTitle}.eml`;
 
 
   try {
@@ -179,40 +181,41 @@ async function _saveIfNotExist(mail, output) {
     // Ensure the save path exists
     try {
       await access(absoluteFolderPath, constants.F_OK);
-      console.log(`Folder ${absoluteFolderPath} already exists.`);
+      console.log(clc.blue(`Skipped: Folder already exists | ${absoluteFolderPath}`));
       return;
     } catch {
       await mkdir(absoluteFolderPath, { recursive: true });
-    }
+    
+      // Write email content to .md file
+      const markdownContent = await convertEmailToMarkdown(mail, `${absoluteFolderPath}/assets`);
+      await writeFile(mdFilePath, markdownContent);
+      await writeFile(jsonFilePath, JSON.stringify(mail));
+      await writeFile(emlFilePath, mail.source);
 
-    // Write email content to .md file
-    const markdownContent = await convertEmailToMarkdown(mail, `${absoluteFolderPath}/assets`);
-    await writeFile(mdFilePath, markdownContent);
-    await writeFile(jsonFilePath, JSON.stringify(mail));
+      // Check if there are attachments
+      if (mail.attachments && mail.attachments.length > 0) {
+        const zipStream = createWriteStream(zipFilePath);
+        const archive = archiver('zip', { zlib: { level: 9 } });
 
-    // Check if there are attachments
-    if (mail.attachments && mail.attachments.length > 0) {
-      const zipStream = createWriteStream(zipFilePath);
-      const archive = archiver('zip', { zlib: { level: 9 } });
+        archive.pipe(zipStream);
 
-      archive.pipe(zipStream);
+        // Append email content to zip archive
+        // archive.append(mail.text, { name: `${sanitizedTitle}.md` });
 
-      // Append email content to zip archive
-      // archive.append(mail.text, { name: `${sanitizedTitle}.md` });
-
-      // Append attachments to zip archive
-      for (const attachment of mail.attachments) {
-        if(attachment && attachment.filename && attachment.content) {
-          const fileNameParts = splitAtLastDot(attachment.filename);
-          const sanitizedFilename = (await _sanitizeFilename(fileNameParts[0])) + '.' + (await _sanitizeFilename(fileNameParts[1]));
-          archive.append(attachment.content, { name: sanitizedFilename });
+        // Append attachments to zip archive
+        for (const attachment of mail.attachments) {
+          if(attachment && attachment.filename && attachment.content) {
+            const fileNameParts = splitAtLastDot(attachment.filename);
+            const sanitizedFilename = (await _sanitizeFilename(fileNameParts[0])) + '.' + (await _sanitizeFilename(fileNameParts[1]));
+            archive.append(attachment.content, { name: sanitizedFilename });
+          }
         }
-      }
 
-      // Finalize the zip archive
-      await archive.finalize();
+        // Finalize the zip archive
+        await archive.finalize();
+      }
     }
   } catch (e) {
-    console.error(`Failed to save email: ${sanitizedTitle}`, e);
+    console.error(clc.redBright(`Failed to save email: ${sanitizedTitle}`), e);
   }
 }

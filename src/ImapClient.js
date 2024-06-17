@@ -22,7 +22,7 @@ class ImapClient {
 
      // Use listMailboxes method to get mailboxes
      const mailboxes = await this.#client.list();
-     console.log('Mailboxes:', mailboxes);
+     console.log('Mailboxes:', mailboxes.map(mailbox => mailbox.name).join(', '));
 
     
     const messages = []
@@ -63,6 +63,7 @@ class ImapClient {
                 dateString,
                 mailbox,
                 ...mail,
+                source: message.source,
                 // title,
                 // text: `# ${title}\n${mail.text}`,
                 // attachments,
