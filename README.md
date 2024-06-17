@@ -26,7 +26,7 @@ format.
 - added `start` and `end` arguments
 - `end` defaults to tomorrow
 - `start` tries to read the *last execution* and use this date or falls back to *last month*
-- removed ~~`from`~~ and ~~`output`~~ arguments
+- removed `from` and `output` arguments
 - removed passwords from env file and promt after starting the command
 
 ## Usage
