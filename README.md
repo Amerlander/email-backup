@@ -31,7 +31,7 @@ The script can be run with the following command:
 npx email-backup --envFile <path to env file> --start "2020-01-01" --end "2023-01-02"
 ```
 
-Or to just fetch emails from last month: / last execution
+Or to just fetch emails from last execution / month until now
 ```bash
 npx email-backup --envFile <path to env file>
 ```
