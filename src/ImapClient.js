@@ -19,39 +19,61 @@ class ImapClient {
 
   async fetch(query) {
     await this.#client.connect()
-    const lock = await this.#client.getMailboxLock('INBOX')
+
+     // Use listMailboxes method to get mailboxes
+     const mailboxes = await this.#client.list();
+     console.log('Mailboxes:', mailboxes);
+
+    
     const messages = []
+
+    
     try {
       const fetchOptions = {
         source: true,
         headers: ['date', 'subject'],
         bodyStructure: true,
+
+        flags: true,
+        envelope: true,
+        mailbox: true,
+        uid: true,
       }
 
-      // const query = { since: sinceDate, ... };
-      // const query = Object.keys(searchQuery).length ? searchQuery : { all: true }
-      for await (const message of this.#client.fetch(query, fetchOptions)) {
-        
-        const mail = await simpleParser(message.source)
-        // console.log(mail)
-        const dateString = (mail.date) ? `${mail.date.toISOString().split('T')[0]} ${mail.date.toTimeString().split(' ')[0]}` : 'NO VALID DATE';
-        // const subject = (mail.subject || 'No Subject')
-        // console.log('READ EMAIL', title)
-        // const attachments = mail.attachments.map(attachment => ({
-        //   filename: attachment.filename,
-        //   content: attachment.content,
-        // }))
+      for (const mailbox of mailboxes) {
+        const lock = await this.#client.getMailboxLock(mailbox.name)
+        await this.#client.mailboxOpen(mailbox.name);
 
-        messages.push({
-          dateString,
-          ...mail,
-          // title,
-          // text: `# ${title}\n${mail.text}`,
-          // attachments,
-        })
+        console.log(`Fetching emails from ${mailbox.name}...`);
+        try {
+          // const query = { since: sinceDate, ... };
+          // const query = Object.keys(searchQuery).length ? searchQuery : { all: true }
+          for await (const message of this.#client.fetch(query, fetchOptions)) {
+            
+            const mail = await simpleParser(message.source)
+            const dateString = (mail.date) ? `${mail.date.toISOString().split('T')[0]} ${mail.date.toTimeString().split(' ')[0]}` : 'NO VALID DATE';
+            // const subject = (mail.subject || 'No Subject')
+            // console.log('READ EMAIL', mail)
+            // const attachments = mail.attachments.map(attachment => ({
+            //   filename: attachment.filename,
+            //   content: attachment.content,
+            // }))
+
+            messages.push({
+              dateString,
+              mailbox,
+              ...mail,
+              // title,
+              // text: `# ${title}\n${mail.text}`,
+              // attachments,
+            })
+          }
+        } finally {
+          await lock.release()
+        }
       }
     } finally {
-      await lock.release()
+      //
     }
     await this.#client.logout()
     return messages
