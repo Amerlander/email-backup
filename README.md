@@ -8,7 +8,7 @@ format.
 
 ## Additions in this Fork:
 
-- A folder is created per Email ( in the format of `YYYY-MM-DD_h-m-s from subject id` )
+- A folder is created per Email ( in the format of `YYYY-MM-DD_h-m-s __SPAM__ from subject` )
 - Folder name is sanitized to prevent conflicts
 - HTML in any email is translated into Makrdown
 - Email Meta information is appended to the top of each md file
@@ -31,7 +31,7 @@ The script can be run with the following command:
 npx email-backup --envFile <path to env file> --start "2020-01-01" --end "2023-01-02"
 ```
 
-Or to just fetch emails from last month: / last execution
+Or to just fetch emails from last execution / month until now
 ```bash
 npx email-backup --envFile <path to env file>
 ```
