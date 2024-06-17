@@ -23,10 +23,10 @@ async function _sanitizeFilename(filename) {
   // Replace special characters with underscores
   if(filename && filename.length) {
   return filename
-            // .replace(/\./g, 'DOT')
+            .replace(/\./g, '+')
             .replace(/@/g, 'AT')
             .replace(/\s/g, '_')
-            .replace(/[^0-9a-zA-Z_-]/g, '-').trim();
+            .replace(/[^0-9a-zA-Z+_]/g, '-').trim();
   } else {
     return '___';
   }
@@ -64,59 +64,73 @@ async function convertEmailToMarkdown(email, savePath) {
   const date = email.dateString || new Date().toString();
   const attachments = email.attachments.map(att => `[${att.name}](${att.cid})`).join(', ');
   const spamState = `# Spam: ${email.headers.get('x-spam')}: ${email.headers.get('x-spam-level')}`;
+  let markdownBody = email.text;
 
-  // Convert HTML to DOM
-  const htmlContent = email.html || email.textAsHtml || email.text;
-  const dom = new JSDOM(htmlContent);
-  const document = dom.window.document;
+  try {
+      
+    // Convert HTML to DOM
+    const htmlContent = email.html || email.textAsHtml || email.text;
+    const dom = new JSDOM(htmlContent);
+    const document = dom.window.document;
 
-  // Remove CSS
-  Array.from(document.querySelectorAll('style, link[rel="stylesheet"]')).forEach(element => element.remove());
+    // Remove CSS
+    Array.from(document.querySelectorAll('style, link[rel="stylesheet"]')).forEach(element => element.remove());
 
-  // Save images and update their src attributes
-  const images = Array.from(document.querySelectorAll('img'));
-  let imageCounter = 1;
-  for (let img of images) {
-    const src = img.getAttribute('src');
+    // Save images and update their src attributes
+    const images = Array.from(document.querySelectorAll('img'));
+    let imageCounter = 1;
+    for (let img of images) {
+      const src = img.getAttribute('src');
 
-    if (src.startsWith('data:image/')) {
-      // If the src is already a base64-encoded image, do nothing
-      continue;
-    }
+      if (src.startsWith('data:image/')) {
+        // If the src is already a base64-encoded image, do nothing
+        continue;
+      }
 
-    let imgData, imgExt;
-    if (src.startsWith('http') || src.startsWith('www') || isValidUrl(src)) {
-      const response = await axios.get(src, { responseType: 'arraybuffer' });
-      imgData = Buffer.from(response.data);
-      imgExt = path.extname(new URL(src).pathname).slice(1) || 'jpg';
-    } else {
-      try {
-        const filePath = path.resolve(src);
-        imgData = await readFile(filePath);
-        imgExt = path.extname(src).slice(1) || 'jpg';
-      } catch (err) {
-        console.error(`Failed to read local image: ${src}`, err);
-        imgData = null;
-        imgExt = 'jpg'; // Fallback in case of error
+      let imgData, imgExt;
+      if (src.startsWith('http') || src.startsWith('www') || isValidUrl(src)) {
+        const response = await axios.get(src, { responseType: 'arraybuffer' });
+        imgData = Buffer.from(response.data);
+        imgExt = path.extname(new URL(src).pathname).slice(1) || 'jpg';
+      } else {
+        try {
+          const filePath = path.resolve(src);
+          imgData = await readFile(filePath);
+          imgExt = path.extname(src).slice(1) || 'jpg';
+        } catch (err) {
+          console.error(`Failed to read local image: ${src}`);
+          imgData = null;
+          imgExt = 'jpg'; // Fallback in case of error
+          continue;
+        }
+      }
+
+      if (imgData) {
+        const imageName = `${imageCounter}.${imgExt}`;
+        const imagePath = path.join(savePath, imageName);
+        await writeFile(imagePath, imgData);
+        img.setAttribute('src', `./assets/${imageName}`);
+        imageCounter++;
       }
     }
 
-    if (imgData) {
-      const imageName = `${imageCounter}.${imgExt}`;
-      const imagePath = path.join(savePath, imageName);
-      await writeFile(imagePath, imgData);
-      img.setAttribute('src', `./assets/${imageName}`);
-      imageCounter++;
+
+    // Convert HTML body to Markdown using Turndown
+    const turndownService = new Turndown();
+    markdownBody = turndownService.turndown(document.body.innerHTML);
+  
+  } catch {
+    try {
+      console.error(`Failed to convert HTML body to DOM. Falling back to text as HTML.`)
+    const turndownService = new Turndown();
+    markdownBody = turndownService.turndown(email.textAsHtml);
+    } catch {
+      console.error(`Failed to convert HTML body to Markdown using Turndown. Falling back to plain text.`)
     }
   }
 
-
-  // Convert HTML body to Markdown using Turndown
-  const turndownService = new Turndown();
-  const markdownBody = turndownService.turndown(document.body.innerHTML);
-
   // Construct Markdown content
-  const markdownContent = `${(email.headers.get('x-spam-level')) ? spamState : ''}
+  const markdownContent = `${(email.headers.get('x-spam-level') || email.headers.get('x-spam')) ? spamState : ''}
   
 ### Email Metadata:
 - **Mailbox:** ${mailbox}
@@ -160,7 +174,15 @@ async function _saveIfNotExist(mail, output) {
 
   try {
     // Create folder if it doesn't exist
-    await mkdir(absoluteFolderPath, { recursive: true });
+    
+    // Ensure the save path exists
+    try {
+      await access(absoluteFolderPath, constants.F_OK);
+      console.log(`Folder ${absoluteFolderPath} already exists.`);
+      return;
+    } catch {
+      await mkdir(absoluteFolderPath, { recursive: true });
+    }
 
     // Write email content to .md file
     const markdownContent = await convertEmailToMarkdown(mail, `${absoluteFolderPath}/assets`);
@@ -181,7 +203,7 @@ async function _saveIfNotExist(mail, output) {
       for (const attachment of mail.attachments) {
         if(attachment && attachment.filename && attachment.content) {
           const fileNameParts = splitAtLastDot(attachment.filename);
-          const sanitizedFilename = (await _sanitizeFilename(fileNameParts[0])) + (await _sanitizeFilename(fileNameParts[1]));
+          const sanitizedFilename = (await _sanitizeFilename(fileNameParts[0])) + '.' + (await _sanitizeFilename(fileNameParts[1]));
           archive.append(attachment.content, { name: sanitizedFilename });
         }
       }
