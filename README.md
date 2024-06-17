@@ -14,18 +14,24 @@ format.
 - Email Meta information is appended to the top of each md file
 - The full Email Object is stored in a JSON file
 - If there are any attachments they will be saved into a Zip file
+- files are stored inside the MAIL folder, one subfolder per env file and each have subfolders for mailboxes
+- last execution is saved in MAIL folder
 - added `start` and `end` arguments
-- removed `from` argument
+- end defaults to tomorrow
+- start tries to read the last execution and use this date or falls back to last month
+- removed `from` and `output` arguments
+- removed passwords from env file and promt after starting the command
+
 
 ## Usage
 
 The script can be run with the following command:
 
 ```bash
-npx email-backup --envFile <path to env file> --output <output directory> --start "2020-01-01" --end "2023-01-02"
+npx email-backup --envFile <path to env file> --start "2020-01-01" --end "2023-01-02"
 ```
 
-Or to just fetch emails from last month:
+Or to just fetch emails from last month: / last execution
 ```bash
-npx email-backup --envFile <path to env file> --output <output directory>
+npx email-backup --envFile <path to env file>
 ```
