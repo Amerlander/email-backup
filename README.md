@@ -8,7 +8,7 @@ format.
 
 ## Additions in this Fork:
 
-- A folder is created per Email ( in the format of `YYYY-MM-DD_h-m-s from subject id` )
+- A folder is created per Email ( in the format of `YYYY-MM-DD_h-m-s __SPAM__ from subject` )
 - Folder name is sanitized to prevent conflicts
 - HTML in any email is translated into Makrdown
 - Email Meta information is appended to the top of each md file
