@@ -73,6 +73,9 @@ async function main() {
     before: argsWithDefaults.end,
   }
 
+    // Save the current date as the last execution date
+    await writeFile(lastExecutionFile, new Date().toISOString())
+
   console.log("Search Query:", searchQuery)
 
   // Ensure the output directory exists
@@ -84,8 +87,6 @@ async function main() {
 
   await fetchAndBackupEmail({ imapConfig, searchQuery, output: argsWithDefaults.output })
 
-  // Save the current date as the last execution date
-  await writeFile(lastExecutionFile, new Date().toISOString())
 }
 
 main().catch(console.error)
