@@ -189,7 +189,7 @@ async function _saveIfNotExist(mail, output) {
       // Write email content to .md file
       const markdownContent = await convertEmailToMarkdown(mail, `${absoluteFolderPath}/assets`);
       await writeFile(mdFilePath, markdownContent);
-      await writeFile(jsonFilePath, JSON.stringify(mail));
+      // await writeFile(jsonFilePath, JSON.stringify(mail));
       await writeFile(emlFilePath, mail.source);
 
       // Check if there are attachments
