@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Email Archiver</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <div class="app-container">
+    <header class="app-header">
+      <div class="logo">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M4 7.00005L10.2 11.65C11.2667 12.45 12.7333 12.45 13.8 11.65L20 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <rect x="3" y="5" width="18" height="14" rx="2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <h1>Email Archiver</h1>
+      </div>
+      <div class="status-indicator">
+        <div class="status-dot" id="global-status-dot"></div>
+        <span id="global-status-text">Idle</span>
+      </div>
+    </header>
+
+    <main class="app-main">
+      <div class="sidebar">
+        <div class="sidebar-header">
+          <h2>Accounts</h2>
+          <button id="add-account-btn" class="btn btn-icon" title="Add Account">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          </button>
+        </div>
+        <ul id="account-list" class="account-list">
+          <!-- Accounts injected here -->
+        </ul>
+      </div>
+
+      <div class="content-pane">
+        <div id="account-details" class="card hidden">
+          <h2 id="editing-account-title">Account Details</h2>
+          <form id="account-form" class="form-grid">
+            <input type="hidden" id="original-filename" />
+            <div class="form-group">
+              <label for="env-filename">Config Name (usually your_email.env)</label>
+              <input type="text" id="env-filename" required pattern=".*\.(env|local)$|^[a-zA-Z0-9_\-\.]+$" placeholder="e.g. personal.env">
+            </div>
+            <div class="form-group">
+              <label for="imap-host">IMAP Host</label>
+              <input type="text" id="imap-host" required placeholder="imap.gmail.com">
+            </div>
+            <div class="form-group">
+              <label for="imap-port">IMAP Port</label>
+              <input type="number" id="imap-port" required value="993">
+            </div>
+            <div class="form-group">
+              <label for="imap-user">IMAP User</label>
+              <input type="text" id="imap-user" required placeholder="you@domain.com">
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn btn-primary">Save Account</button>
+              <button type="button" class="btn btn-danger" id="delete-account-btn">Delete</button>
+              <button type="button" class="btn btn-secondary" id="cancel-account-btn">Cancel</button>
+            </div>
+          </form>
+        </div>
+
+        <div id="backup-control" class="card hidden">
+          <h2>Run Backup for <span id="selected-account-name"></span></h2>
+          <div class="form-grid info-grid">
+            <div class="form-group">
+              <label for="backup-start-date">Start Date (Optional)</label>
+              <input type="date" id="backup-start-date">
+              <span id="last-execution-info" class="text-xs" style="color:var(--text-muted); margin-top:4px;"></span>
+            </div>
+            <div class="form-group">
+              <label for="backup-end-date">End Date (Optional)</label>
+              <input type="date" id="backup-end-date">
+            </div>
+          </div>
+          
+          <div class="form-group" style="margin-top: 16px;">
+            <label for="backup-pass">IMAP Password / App Password (Required for backup)</label>
+            <input type="password" id="backup-pass" required placeholder="••••••••">
+          </div>
+          
+          <div class="form-group" style="margin-top: 24px; padding: 12px; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px;">
+            <label for="delete-older-than" style="color: #fca5a5; font-weight: bold;">[Destructive] Delete emails from Server older than:</label>
+            <input type="date" id="delete-older-than" style="border-color: rgba(239, 68, 68, 0.4);">
+            <span class="text-xs" style="color: #fca5a5; margin-top:4px;">Leave blank to keep all emails. If set, emails OLDER than this date will be permanently deleted from the IMAP server after backup.</span>
+          </div>
+
+          <div class="backup-actions">
+            <button id="start-backup-btn" class="btn btn-primary btn-large">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+              Start Archiving
+            </button>
+            <button id="stop-backup-btn" class="btn btn-danger btn-large hidden">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect></rect></svg>
+              Stop Archiving
+            </button>
+          </div>
+          <div class="progress-container hidden" id="progress-container">
+            <div class="progress-bar-wrap">
+              <div class="progress-bar" id="progress-bar"></div>
+            </div>
+            <div class="progress-stats" id="progress-stats">0 / 0 Emails</div>
+          </div>
+        </div>
+
+        <div class="terminal-card">
+          <div class="terminal-header">
+            <div class="dots"><span></span><span></span><span></span></div>
+            <span>Logs</span>
+            <button id="clear-logs-btn" class="btn-clear text-xs">Clear</button>
+          </div>
+          <div class="terminal-body" id="log-output">
+            <div class="log-entry system">System initialized. Waiting for actions...</div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+  <script type="module" src="./main.js"></script>
+</body>
+</html>

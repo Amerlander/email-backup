@@ -10,15 +10,47 @@ import axios from 'axios';
 import { URL } from 'url';
 import clc from 'cli-color';
 
-export async function fetchAndBackupEmail({ imapConfig, searchQuery, output }) {
+export async function fetchAndBackupEmail({ imapConfig, searchQuery, output, eventEmitter, abortSignal, deleteOlderThan }) {
   const client = new ImapClient(imapConfig)
-  const messages = await client.fetch(searchQuery)
-  const countMessages = messages.length;
-  for (const [index, message] of messages.entries()) {
-    console.log(`Processing ${index+1}/${countMessages} | ${message.dateString} | ${message.subject}`)
-    await _saveIfNotExist(message, output)
+  if (eventEmitter) eventEmitter.emit('log', 'Connecting to IMAP and searching messages...');
+  
+  let totalMessages = 0;
+  let processedMessages = 0;
+
+  for await (const chunk of client.fetch(searchQuery)) {
+    if (abortSignal?.aborted) {
+      console.log(clc.yellow("=== ABORTED ==="));
+      if (eventEmitter) eventEmitter.emit('log', "=== ABORTED ===");
+      return;
+    }
+    
+    if (chunk.type === 'count') {
+      totalMessages += chunk.count;
+      if (eventEmitter) eventEmitter.emit('log', `Found ${chunk.count} messages in ${chunk.mailbox}.`);
+    } else if (chunk.type === 'message') {
+      processedMessages++;
+      const message = chunk.data;
+      const logMsg = `Processing ${processedMessages}/${totalMessages} | ${message.dateString} | ${message.subject}`;
+      console.log(logMsg);
+      if (eventEmitter) eventEmitter.emit('progress', { index: processedMessages, total: totalMessages, logMsg });
+      await _saveIfNotExist(message, output, eventEmitter)
+    }
   }
-  console.log(clc.green("=== FINISHED ==="))
+
+  console.log(clc.green("=== FINISHED FETCHING ==="))
+  if (eventEmitter) eventEmitter.emit('log', "=== FINISHED FETCHING ===");
+  
+  if (deleteOlderThan && !abortSignal?.aborted) {
+    if (eventEmitter) eventEmitter.emit('log', `Starting deletion of messages older than ${deleteOlderThan} on server...`);
+    try {
+      const deletedCount = await client.deleteMessages({ before: deleteOlderThan });
+      if (eventEmitter) eventEmitter.emit('log', `Successfully deleted ${deletedCount} old messages from the server.`);
+    } catch(err) {
+      if (eventEmitter) eventEmitter.emit('log', `Error during deletion: ${err.message}`);
+    }
+  }
+
+  if (eventEmitter) eventEmitter.emit('finished');
 }
 
 async function _sanitizeFilename(filename) {
@@ -160,7 +192,7 @@ function isValidUrl(urlString) {
 }
 
 
-async function _saveIfNotExist(mail, output) {
+async function _saveIfNotExist(mail, output, eventEmitter) {
   const sanitizedSubject = (await _sanitizeFilename(mail.subject)).substring(0, 25);
   const sanitizedFrom = mail.from?.value[0].address ? await _sanitizeFilename(mail.from?.value[0].address) : 'NO-FROM';
   // const sanitizedSMessageID = (await _sanitizeFilename(mail.messageId)).substring(0, 10);
@@ -181,7 +213,9 @@ async function _saveIfNotExist(mail, output) {
     // Ensure the save path exists
     try {
       await access(absoluteFolderPath, constants.F_OK);
-      console.log(clc.blue(`Skipped: Folder already exists | ${absoluteFolderPath}`));
+      const skipMsg = `Skipped: Folder already exists | ${absoluteFolderPath}`;
+      console.log(clc.blue(skipMsg));
+      if (eventEmitter) eventEmitter.emit('log', skipMsg);
       return;
     } catch {
       await mkdir(absoluteFolderPath, { recursive: true });
@@ -191,6 +225,7 @@ async function _saveIfNotExist(mail, output) {
       await writeFile(mdFilePath, markdownContent);
       // await writeFile(jsonFilePath, JSON.stringify(mail));
       await writeFile(emlFilePath, mail.source);
+      if (eventEmitter) eventEmitter.emit('log', `Saved: ${absoluteFolderPath}`);
 
       // Check if there are attachments
       if (mail.attachments && mail.attachments.length > 0) {

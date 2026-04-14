@@ -17,23 +17,17 @@ class ImapClient {
     })
   }
 
-  async fetch(query) {
+  async *fetch(query) {
     await this.#client.connect()
 
-     // Use listMailboxes method to get mailboxes
-     const mailboxes = await this.#client.list();
-     console.log('Mailboxes:', mailboxes.map(mailbox => mailbox.name).join(', '));
+    const mailboxes = await this.#client.list();
+    console.log('Mailboxes:', mailboxes.map(mailbox => mailbox.name).join(', '));
 
-    
-    const messages = []
-
-    
     try {
       const fetchOptions = {
         source: true,
         headers: ['date', 'subject'],
         bodyStructure: true,
-
         flags: true,
         envelope: true,
         mailbox: true,
@@ -46,43 +40,66 @@ class ImapClient {
 
         console.log(`Fetching emails from ${mailbox.name}...`);
         try {
-          // const query = { since: sinceDate, ... };
-          // const query = Object.keys(searchQuery).length ? searchQuery : { all: true }
-          for await (const message of this.#client.fetch(query, fetchOptions)) {
-            try{
+          // Perform a fast search first to get the accurate count
+          const searchList = await this.#client.search(query);
+          if (searchList.length > 0) {
+            yield { type: 'count', mailbox: mailbox.name, count: searchList.length };
+          } else {
+            yield { type: 'count', mailbox: mailbox.name, count: 0 };
+            continue;
+          }
+
+          // Use search list instead of raw query string, or just yield via search sequence
+          for await (const message of this.#client.fetch(searchList, fetchOptions)) {
+             try {
               const mail = await simpleParser(message.source)
               const dateString = (mail.date) ? `${mail.date.toISOString().split('T')[0]} ${mail.date.toTimeString().split(' ')[0]}` : 'NO VALID DATE';
-              // const subject = (mail.subject || 'No Subject')
-              // console.log('READ EMAIL', mail)
-              // const attachments = mail.attachments.map(attachment => ({
-              //   filename: attachment.filename,
-              //   content: attachment.content,
-              // }))
-
-              messages.push({
+              
+              yield { type: 'message', data: {
                 dateString,
                 mailbox,
                 ...mail,
                 source: message.source,
-                // title,
-                // text: `# ${title}\n${mail.text}`,
-                // attachments,
-              })
-            } catch {
-              console.log('ERROR PARSING EMAIL');
-              console.log('MESSAGE', message);
-              console.log('ERROR PARSING EMAIL');
-            }
+              }};
+             } catch {
+               console.log('ERROR PARSING EMAIL');
+             }
           }
         } finally {
           await lock.release()
         }
       }
     } finally {
-      //
+      await this.#client.logout()
     }
-    await this.#client.logout()
-    return messages
+  }
+
+  async deleteMessages(query) {
+    await this.#client.connect()
+    const mailboxes = await this.#client.list();
+    
+    let totalDeleted = 0;
+    
+    try {
+      for (const mailbox of mailboxes) {
+        const lock = await this.#client.getMailboxLock(mailbox.name)
+        await this.#client.mailboxOpen(mailbox.name);
+        
+        try {
+          const list = await this.#client.search(query);
+          if(list.length > 0) {
+            await this.#client.messageDelete(list);
+            totalDeleted += list.length;
+          }
+        } finally {
+          await lock.release()
+        }
+      }
+    } finally {
+      await this.#client.logout()
+    }
+    
+    return totalDeleted;
   }
 }
 
