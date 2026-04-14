@@ -108,6 +108,23 @@
             </div>
             <div class="progress-stats" id="progress-stats">0 / 0 Emails</div>
           </div>
+          
+          <div class="mailbox-breakdown hidden" id="mailbox-breakdown" style="margin-top: 24px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.1);">
+            <h3 style="font-size: 14px; margin-bottom: 8px; color: #9ca3af;">Mailbox Breakdown</h3>
+            <table style="width: 100%; text-align: left; border-collapse: collapse; font-size: 13px;">
+              <thead>
+                <tr style="border-bottom: 1px solid rgba(255,255,255,0.1); color: #6b7280;">
+                  <th style="padding: 4px;">Mailbox</th>
+                  <th style="padding: 4px; text-align: right;">Found</th>
+                  <th style="padding: 4px; text-align: right; color: #34d399;">Backed Up</th>
+                  <th style="padding: 4px; text-align: right; color: #fca5a5;">Deleted</th>
+                </tr>
+              </thead>
+              <tbody id="mailbox-stats-body">
+                <!-- Dynamically populated rows -->
+              </tbody>
+            </table>
+          </div>
         </div>
 
         <div class="terminal-card">

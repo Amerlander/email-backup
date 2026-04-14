@@ -19,6 +19,7 @@ export async function fetchAndBackupEmail({ imapConfig, searchQuery, output, eve
   let totalMessages = 0;
   let processedMessages = 0;
   const uidsToDeleteByMailbox = {};
+  const mailboxStats = {}; // { 'INBOX': { found: 0, saved: 0, deleted: 0 } }
 
   try {
     for await (const chunk of client.fetch(searchQuery)) {
@@ -29,19 +30,28 @@ export async function fetchAndBackupEmail({ imapConfig, searchQuery, output, eve
       }
       
       if (chunk.type === 'count') {
+        const mbox = chunk.mailbox;
+        if (!mailboxStats[mbox]) mailboxStats[mbox] = { found: 0, saved: 0, deleted: 0 };
+        mailboxStats[mbox].found += chunk.count;
         totalMessages += chunk.count;
-        if (eventEmitter) eventEmitter.emit('log', `Found ${chunk.count} messages in ${chunk.mailbox}.`);
+        if (eventEmitter) eventEmitter.emit('mailbox_stats', { mailbox: mbox, stats: mailboxStats[mbox] });
+        if (eventEmitter) eventEmitter.emit('log', `Found ${chunk.count} messages in ${mbox}.`);
       } else if (chunk.type === 'message') {
         processedMessages++;
         const message = chunk.data;
-        const logMsg = `Processing ${processedMessages}/${totalMessages} | ${message.dateString} | ${message.subject}`;
+        const mbox = message.mailbox.name;
+        if (!mailboxStats[mbox]) mailboxStats[mbox] = { found: 0, saved: 0, deleted: 0 };
+
+        const logMsg = `Processing ${processedMessages}/${totalMessages} | ${mbox}`;
         console.log(logMsg);
         if (eventEmitter) eventEmitter.emit('progress', { index: processedMessages, total: totalMessages, logMsg });
         const savedSuccessfully = await _saveIfNotExist(message, output, eventEmitter);
 
-        if (savedSuccessfully && deleteOlderThan) {
-           if (new Date(message.date) < new Date(deleteOlderThan)) {
-               const mbox = message.mailbox.name;
+        if (savedSuccessfully) {
+           mailboxStats[mbox].saved++;
+           if (eventEmitter) eventEmitter.emit('mailbox_stats', { mailbox: mbox, stats: mailboxStats[mbox] });
+           
+           if (deleteOlderThan && new Date(message.date) < new Date(deleteOlderThan)) {
                if (!uidsToDeleteByMailbox[mbox]) uidsToDeleteByMailbox[mbox] = [];
                if (message.uid) uidsToDeleteByMailbox[mbox].push(message.uid);
            }
@@ -60,6 +70,8 @@ export async function fetchAndBackupEmail({ imapConfig, searchQuery, output, eve
            if (uids.length > 0) {
              const deletedCount = await client.deleteMessagesByUid(mailboxName, uids);
              totalDeleted += deletedCount;
+             mailboxStats[mailboxName].deleted += deletedCount;
+             if (eventEmitter) eventEmitter.emit('mailbox_stats', { mailbox: mailboxName, stats: mailboxStats[mailboxName] });
              if (eventEmitter) eventEmitter.emit('log', `Permanently deleted ${deletedCount} messages from ${mailboxName}.`);
            }
         }

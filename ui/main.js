@@ -19,12 +19,17 @@ const progressBar = document.getElementById('progress-bar');
 const progressStats = document.getElementById('progress-stats');
 const logOutput = document.getElementById('log-output');
 const clearLogsBtn = document.getElementById('clear-logs-btn');
+const mailboxBreakdown = document.getElementById('mailbox-breakdown');
+const mailboxStatsBody = document.getElementById('mailbox-stats-body');
 
 const globalStatusDot = document.getElementById('global-status-dot');
 const globalStatusText = document.getElementById('global-status-text');
 
 let accounts = [];
 let selectedAccount = null;
+let logQueue = [];
+let isRenderingLogs = false;
+const mailboxData = {};
 
 // Initialize
 async function init() {
@@ -174,7 +179,12 @@ function setupEventListeners() {
       }
     }
     
-    appendLog('System', `Starting backup for ${selectedAccount.filename}...`);
+    // Reset UI
+    mailboxStatsBody.innerHTML = '';
+    for (const key in mailboxData) delete mailboxData[key];
+    mailboxBreakdown.classList.remove('hidden');
+    
+    appendLog('system', `Starting backup for ${selectedAccount.filename}...`);
     try {
       const res = await fetch(`${API_BASE}/backup/start`, {
         method: 'POST',
@@ -183,22 +193,59 @@ function setupEventListeners() {
       });
       if(!res.ok) {
         const err = await res.json();
-        appendLog('Error', `Failed to start: ${err.error}`);
+        appendLog('error', `Failed to start: ${err.error}`);
         alert(`Failed to start: ${err.error}`);
       }
     } catch(err) {
-       appendLog('Error', err.message);
+       appendLog('error', err.message);
     }
   };
 
   stopBackupBtn.onclick = async () => {
-    appendLog('System', 'Requesting abort...');
+    appendLog('system', 'Requesting abort...');
     await fetch(`${API_BASE}/backup/stop`, { method: 'POST' });
   };
 
   clearLogsBtn.onclick = () => {
     logOutput.innerHTML = '';
   };
+}
+
+function renderLogs() {
+  if (logQueue.length === 0) {
+    isRenderingLogs = false;
+    return;
+  }
+  
+  isRenderingLogs = true;
+  const fragment = document.createDocumentFragment();
+  
+  while (logQueue.length > 0) {
+    const { element } = logQueue.shift();
+    fragment.appendChild(element);
+  }
+  
+  logOutput.appendChild(fragment);
+  
+  while (logOutput.children.length > 300) {
+    logOutput.removeChild(logOutput.firstChild);
+  }
+  
+  logOutput.scrollTop = logOutput.scrollHeight;
+  requestAnimationFrame(renderLogs);
+}
+
+function appendLog(type, message) {
+  const el = document.createElement('div');
+  el.className = `log-entry ${type.toLowerCase()}`;
+  const time = new Date().toLocaleTimeString([], { hour12: false });
+  el.textContent = `[${time}] ${message}`;
+  
+  logQueue.push({ element: el, type });
+  
+  if (!isRenderingLogs) {
+    requestAnimationFrame(renderLogs);
+  }
 }
 
 function setupSSE() {
@@ -211,13 +258,16 @@ function setupSSE() {
         updateStatus(data.active, data.env);
         break;
       case 'log':
-        appendLog('Log', data.message);
+        appendLog('log', data.message);
         break;
       case 'progress':
         updateProgress(data.data);
         break;
+      case 'mailbox_stats':
+        updateMailboxStats(data.data);
+        break;
       case 'finished':
-        appendLog('System', 'Backup process finished.');
+        appendLog('system', 'Backup process finished.');
         updateStatus(false, null);
         break;
     }
@@ -245,24 +295,26 @@ function updateStatus(isActive, envName) {
 }
 
 function updateProgress(data) {
-  const { index, total, logMsg } = data;
-  const percent = total > 0 ? (index / total) * 100 : 0;
+  const { index, total } = data;
+  const percent = total > 0 ? Math.min(100, Math.round((index / total) * 100)) : 0;
   progressBar.style.width = `${percent}%`;
-  progressStats.textContent = `${index} / ${total}`;
-  appendLog('Progress', logMsg);
+  progressStats.textContent = `${index} / ${total} Emails`;
 }
 
-function appendLog(type, msg) {
-  const div = document.createElement('div');
-  div.className = `log-entry ${type.toLowerCase()}`;
-  const time = new Date().toLocaleTimeString();
+function updateMailboxStats(data) {
+  const { mailbox, stats } = data;
+  if (!mailboxData[mailbox]) {
+     mailboxData[mailbox] = document.createElement('tr');
+     mailboxData[mailbox].style.borderBottom = '1px solid rgba(255,255,255,0.05)';
+     mailboxStatsBody.appendChild(mailboxData[mailbox]);
+  }
   
-  // Format log message
-  let colorMsg = msg.replace(/\u001b\[0;34m/g, '').replace(/\u001b\[0m/g, ''); // strip some terminal colors
-  
-  div.textContent = `[${time}] ${colorMsg}`;
-  logOutput.appendChild(div);
-  logOutput.scrollTop = logOutput.scrollHeight;
+  mailboxData[mailbox].innerHTML = `
+    <td style="padding: 4px; font-weight: 500;">${mailbox}</td>
+    <td style="padding: 4px; text-align: right; color: #d1d5db;">${stats.found}</td>
+    <td style="padding: 4px; text-align: right; color: #34d399;">${stats.saved}</td>
+    <td style="padding: 4px; text-align: right; color: #fca5a5;">${stats.deleted}</td>
+  `;
 }
 
 function disableForm(disabled) {

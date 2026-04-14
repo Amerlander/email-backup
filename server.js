@@ -99,6 +99,7 @@ app.get('/api/backup/events', (req, res) => {
 
   const onLog = (msg) => res.write(`data: ${JSON.stringify({ type: 'log', message: msg })}\n\n`);
   const onProgress = (data) => res.write(`data: ${JSON.stringify({ type: 'progress', data })}\n\n`);
+  const onMailboxStats = (data) => res.write(`data: ${JSON.stringify({ type: 'mailbox_stats', data })}\n\n`);
   const onFinished = () => res.write(`data: ${JSON.stringify({ type: 'finished' })}\n\n`);
   const onStatus = () => {
     res.write(`data: ${JSON.stringify({ type: 'status', active: !!activeAbortController, env: currentBackupEnv })}\n\n`);
@@ -106,6 +107,7 @@ app.get('/api/backup/events', (req, res) => {
 
   globalEmitter.on('log', onLog);
   globalEmitter.on('progress', onProgress);
+  globalEmitter.on('mailbox_stats', onMailboxStats);
   globalEmitter.on('finished', onFinished);
   globalEmitter.on('status', onStatus);
 
@@ -115,6 +117,7 @@ app.get('/api/backup/events', (req, res) => {
   req.on('close', () => {
     globalEmitter.off('log', onLog);
     globalEmitter.off('progress', onProgress);
+    globalEmitter.off('mailbox_stats', onMailboxStats);
     globalEmitter.off('finished', onFinished);
     globalEmitter.off('status', onStatus);
   });
