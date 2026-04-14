@@ -14,43 +14,68 @@ export async function fetchAndBackupEmail({ imapConfig, searchQuery, output, eve
   const client = new ImapClient(imapConfig)
   if (eventEmitter) eventEmitter.emit('log', 'Connecting to IMAP and searching messages...');
   
+  await client.connect();
+  
   let totalMessages = 0;
   let processedMessages = 0;
+  const uidsToDeleteByMailbox = {};
 
-  for await (const chunk of client.fetch(searchQuery)) {
-    if (abortSignal?.aborted) {
-      console.log(clc.yellow("=== ABORTED ==="));
-      if (eventEmitter) eventEmitter.emit('log', "=== ABORTED ===");
-      return;
+  try {
+    for await (const chunk of client.fetch(searchQuery)) {
+      if (abortSignal?.aborted) {
+        console.log(clc.yellow("=== ABORTED ==="));
+        if (eventEmitter) eventEmitter.emit('log', "=== ABORTED ===");
+        return;
+      }
+      
+      if (chunk.type === 'count') {
+        totalMessages += chunk.count;
+        if (eventEmitter) eventEmitter.emit('log', `Found ${chunk.count} messages in ${chunk.mailbox}.`);
+      } else if (chunk.type === 'message') {
+        processedMessages++;
+        const message = chunk.data;
+        const logMsg = `Processing ${processedMessages}/${totalMessages} | ${message.dateString} | ${message.subject}`;
+        console.log(logMsg);
+        if (eventEmitter) eventEmitter.emit('progress', { index: processedMessages, total: totalMessages, logMsg });
+        const savedSuccessfully = await _saveIfNotExist(message, output, eventEmitter);
+
+        if (savedSuccessfully && deleteOlderThan) {
+           if (new Date(message.date) < new Date(deleteOlderThan)) {
+               const mbox = message.mailbox.name;
+               if (!uidsToDeleteByMailbox[mbox]) uidsToDeleteByMailbox[mbox] = [];
+               if (message.uid) uidsToDeleteByMailbox[mbox].push(message.uid);
+           }
+        }
+      }
     }
+
+    console.log(clc.green("=== FINISHED FETCHING ==="))
+    if (eventEmitter) eventEmitter.emit('log', "=== FINISHED FETCHING ===");
     
-    if (chunk.type === 'count') {
-      totalMessages += chunk.count;
-      if (eventEmitter) eventEmitter.emit('log', `Found ${chunk.count} messages in ${chunk.mailbox}.`);
-    } else if (chunk.type === 'message') {
-      processedMessages++;
-      const message = chunk.data;
-      const logMsg = `Processing ${processedMessages}/${totalMessages} | ${message.dateString} | ${message.subject}`;
-      console.log(logMsg);
-      if (eventEmitter) eventEmitter.emit('progress', { index: processedMessages, total: totalMessages, logMsg });
-      await _saveIfNotExist(message, output, eventEmitter)
+    if (deleteOlderThan && !abortSignal?.aborted) {
+      if (eventEmitter) eventEmitter.emit('log', `Starting precise deletion of safely backed up messages older than ${deleteOlderThan}...`);
+      try {
+        let totalDeleted = 0;
+        for (const [mailboxName, uids] of Object.entries(uidsToDeleteByMailbox)) {
+           if (uids.length > 0) {
+             const deletedCount = await client.deleteMessagesByUid(mailboxName, uids);
+             totalDeleted += deletedCount;
+             if (eventEmitter) eventEmitter.emit('log', `Permanently deleted ${deletedCount} messages from ${mailboxName}.`);
+           }
+        }
+        if (eventEmitter) eventEmitter.emit('log', `Deletion complete: ${totalDeleted} older messages removed.`);
+      } catch(err) {
+        if (eventEmitter) eventEmitter.emit('log', `Error during precise deletion: ${err.message}`);
+      }
     }
-  }
-
-  console.log(clc.green("=== FINISHED FETCHING ==="))
-  if (eventEmitter) eventEmitter.emit('log', "=== FINISHED FETCHING ===");
-  
-  if (deleteOlderThan && !abortSignal?.aborted) {
-    if (eventEmitter) eventEmitter.emit('log', `Starting deletion of messages older than ${deleteOlderThan} on server...`);
+  } finally {
     try {
-      const deletedCount = await client.deleteMessages({ before: deleteOlderThan });
-      if (eventEmitter) eventEmitter.emit('log', `Successfully deleted ${deletedCount} old messages from the server.`);
-    } catch(err) {
-      if (eventEmitter) eventEmitter.emit('log', `Error during deletion: ${err.message}`);
+      await client.logout();
+    } catch (e) {
+      // Ignored
     }
+    if (eventEmitter) eventEmitter.emit('finished');
   }
-
-  if (eventEmitter) eventEmitter.emit('finished');
 }
 
 async function _sanitizeFilename(filename) {
@@ -215,8 +240,8 @@ async function _saveIfNotExist(mail, output, eventEmitter) {
       await access(absoluteFolderPath, constants.F_OK);
       const skipMsg = `Skipped: Folder already exists | ${absoluteFolderPath}`;
       console.log(clc.blue(skipMsg));
-      if (eventEmitter) eventEmitter.emit('log', skipMsg);
-      return;
+      // if (eventEmitter) eventEmitter.emit('log', skipMsg); // We don't want to spam the log for skipped emails, but we return true
+      return true;
     } catch {
       await mkdir(absoluteFolderPath, { recursive: true });
     
@@ -234,9 +259,6 @@ async function _saveIfNotExist(mail, output, eventEmitter) {
 
         archive.pipe(zipStream);
 
-        // Append email content to zip archive
-        // archive.append(mail.text, { name: `${sanitizedTitle}.md` });
-
         // Append attachments to zip archive
         for (const attachment of mail.attachments) {
           if(attachment && attachment.filename && attachment.content) {
@@ -250,7 +272,9 @@ async function _saveIfNotExist(mail, output, eventEmitter) {
         await archive.finalize();
       }
     }
+    return true;
   } catch (e) {
     console.error(clc.redBright(`Failed to save email: ${sanitizedTitle}`), e);
+    return false;
   }
 }
